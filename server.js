@@ -5,6 +5,9 @@ import swaggerUi from "swagger-ui-express";
 const app = express();
 const PORT = 3000;
 
+// Serve the verification page (public/index.html)
+app.use(express.static("public"));
+
 // Swagger config
 const swaggerOptions = {
     definition: {
@@ -31,7 +34,7 @@ app.get("/crimes", async (req, res) => {
         res.json(response.data.data);
 
     } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error('Error fetching data:', err.message);
         res.status(500).json({ err: 'Internal Server Error' });
     }
 });
@@ -47,7 +50,7 @@ app.get("/crimes/locations", async (req, res) => {
         res.json(headline);
 
     } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error('Error fetching data:', err.message);
         res.status(500).json({ err: 'Internal Server Error' });
     }
 });
@@ -59,12 +62,13 @@ app.get("/crimes/search", async (req, res) => {
         if (!city) {
             return res.status(400).json({ error: "Parameter 'city' is required." });
         }
-        const url = `https://brottsplatskartan.se/api/events?city=${encodeURIComponent(city)}`;
+        // The upstream API filters by "location"; a "city" param is silently ignored.
+        const url = `https://brottsplatskartan.se/api/events?location=${encodeURIComponent(city)}`;
         const response = await axios.get(url);
         res.json(response.data.data);
 
     } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error('Error fetching data:', err.message);
         res.status(500).json({ err: 'Internal Server Error' });
     }
 });
@@ -75,14 +79,14 @@ app.get("/crimes/latest", async (req, res) => {
 
         const latest = response.data.data;
 
-        if (latest === 0) {
+        if (!latest || latest.length === 0) {
             return res.status(404).json({ error: "No data found." });
         }
 
         res.json(latest[0]);
 
     } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error('Error fetching data:', err.message);
         res.status(500).json({ err: 'Internal Server Error' });
     }
 });

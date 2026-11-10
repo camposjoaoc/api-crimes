@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crimes API – Verificação</title>
+<!-- Tailwind CSS 4 (browser build): good for a dev tool page, no build step needed -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  /* Tailwind v4: custom classes that are reused via @apply must be declared with @utility */
+  @utility card { @apply rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900; }
+  @utility chip { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap; }
+  @utility btn { @apply inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition disabled:cursor-default disabled:opacity-60; }
+  @utility btn-primary { @apply btn bg-indigo-600 text-white hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600; }
+  @utility btn-ghost { @apply btn border border-zinc-200 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800; }
+</style>
+</head>
+<body class="min-h-screen bg-zinc-50 font-sans text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100">
+<main class="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+
+  <!-- Header -->
+  <header class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">Crimes API · Sverige</p>
+      <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Painel de verificação</h1>
+      <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Confere se cada rota responde e se os dados da Brottsplatskartan estão chegando.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="serverPill" class="chip bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+        <span class="size-1.5 rounded-full bg-zinc-400"></span> verificando…
+      </span>
+      <a href="/api-docs" class="btn-ghost">Swagger <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <!-- Summary -->
+  <section class="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+    <div class="card p-3 sm:p-5">
+      <p class="text-xs leading-tight text-zinc-500 sm:text-sm dark:text-zinc-400">Rotas OK</p>
+      <p class="mt-1 text-lg font-semibold tabular-nums sm:mt-2 sm:text-3xl"><span id="okCount">–</span><span class="text-sm text-zinc-400 sm:text-lg"> / <span id="totalCount">–</span></span></p>
+    </div>
+    <div class="card p-3 sm:p-5">
+      <p class="text-xs leading-tight text-zinc-500 sm:text-sm dark:text-zinc-400">Latência média</p>
+      <p class="mt-1 text-lg font-semibold tabular-nums sm:mt-2 sm:text-3xl"><span id="avgMs">–</span><span class="text-sm text-zinc-400 sm:text-lg"> ms</span></p>
+    </div>
+    <div class="card p-3 sm:p-5">
+      <p class="text-xs leading-tight text-zinc-500 sm:text-sm dark:text-zinc-400">Verificado às</p>
+      <p id="lastRun" class="mt-1 text-lg font-semibold tabular-nums sm:mt-2 sm:text-3xl">–</p>
+    </div>
+  </section>
+
+  <!-- Routes -->
+  <section class="card mt-6 overflow-hidden">
+    <div class="flex items-center justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+      <div>
+        <h2 class="font-semibold">Saúde das rotas</h2>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">Clique numa rota para ver a resposta.</p>
+      </div>
+      <button id="runAll" class="btn-primary">
+        <svg id="runIcon" class="size-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15.3 4.7a7 7 0 1 0 1.6 7.4.9.9 0 1 1 1.7.6A8.8 8.8 0 1 1 16.6 3.4V2a.9.9 0 0 1 1.8 0v4a.9.9 0 0 1-.9.9h-4a.9.9 0 0 1 0-1.8h1.8Z" clip-rule="evenodd"/></svg>
+        Testar todas
+      </button>
+    </div>
+    <ul id="routes" class="divide-y divide-zinc-200 dark:divide-zinc-800"></ul>
+  </section>
+
+  <!-- Search -->
+  <section class="card mt-6 p-5">
+    <h2 class="font-semibold">Buscar por cidade</h2>
+    <form id="searchForm" class="mt-4 flex flex-col gap-2 sm:flex-row">
+      <label for="city" class="sr-only">Cidade</label>
+      <input id="city" required value="Stockholm" placeholder="ex.: Stockholm, Göteborg, Lund"
+        class="flex-1 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm shadow-xs outline-none placeholder:text-zinc-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-950">
+      <button type="submit" class="btn-primary justify-center">Buscar</button>
+    </form>
+    <div id="quickCities" class="mt-3 flex flex-wrap gap-2"></div>
+
+    <p id="searchInfo" class="mt-5 text-sm text-zinc-500 dark:text-zinc-400"></p>
+    <div id="results" class="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2"></div>
+  </section>
+
+  <footer class="mt-10 text-center text-xs text-zinc-400">
+    Dados: <a class="underline hover:text-zinc-600 dark:hover:text-zinc-300" href="https://brottsplatskartan.se" target="_blank" rel="noopener">brottsplatskartan.se</a> · Polisen
+  </footer>
+</main>
+
+<template id="routeTpl">
+  <li>
+    <details class="group">
+      <summary class="flex cursor-pointer list-none items-center gap-3 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+        <span class="chip bg-emerald-50 font-mono text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30">GET</span>
+        <div class="min-w-0 flex-1">
+          <code data-path class="block truncate font-mono text-sm"></code>
+          <p data-desc class="truncate text-sm text-zinc-500 dark:text-zinc-400"></p>
+        </div>
+        <span data-meta class="hidden text-right text-xs tabular-nums text-zinc-500 sm:block dark:text-zinc-400"></span>
+        <span data-status class="chip bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">—</span>
+        <svg class="size-4 shrink-0 text-zinc-400 transition group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.2 14.8a.9.9 0 0 1 0-1.3L10.7 10 7.2 6.5a.9.9 0 1 1 1.3-1.3l4.1 4.2c.4.3.4.9 0 1.2l-4.1 4.2a.9.9 0 0 1-1.3 0Z" clip-rule="evenodd"/></svg>
+      </summary>
+      <pre data-body class="mx-5 mb-4 max-h-72 overflow-auto rounded-lg bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-300">Ainda não testado.</pre>
+    </details>
+  </li>
+</template>
+
+<template id="eventTpl">
+  <article class="flex flex-col overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+    <img data-img alt="" loading="lazy" class="aspect-[2/1] w-full bg-zinc-100 object-cover dark:bg-zinc-800">
+    <div class="flex flex-1 flex-col p-4">
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span data-type class="chip"></span>
+        <time data-date class="text-zinc-500 dark:text-zinc-400"></time>
+      </div>
+      <h3 data-headline class="mt-2 font-medium leading-snug"></h3>
+      <p data-teaser class="mt-1 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400"></p>
+      <p data-loc class="mt-3 truncate text-xs text-zinc-500 dark:text-zinc-500"></p>
+      <div class="mt-3 flex gap-4 border-t border-zinc-100 pt-3 text-xs font-medium dark:border-zinc-800">
+        <a data-permalink target="_blank" rel="noopener" class="text-indigo-600 hover:underline dark:text-indigo-400">Brottsplatskartan ↗</a>
+        <a data-source target="_blank" rel="noopener" class="text-zinc-600 hover:underline dark:text-zinc-400">Polisen ↗</a>
+      </div>
+    </div>
+  </article>
+</template>
+
+<template id="skeletonTpl">
+  <div class="animate-pulse overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+    <div class="aspect-[2/1] bg-zinc-100 dark:bg-zinc-800"></div>
+    <div class="space-y-2 p-4">
+      <div class="h-3 w-1/3 rounded bg-zinc-100 dark:bg-zinc-800"></div>
+      <div class="h-4 w-5/6 rounded bg-zinc-100 dark:bg-zinc-800"></div>
+      <div class="h-3 w-full rounded bg-zinc-100 dark:bg-zinc-800"></div>
+    </div>
+  </div>
+</template>
+
+<script>
+const ROUTES = [
+  { path: "/crimes", desc: "5 eventos mais recentes em Malmö", check: d => Array.isArray(d) && d.length > 0 },
+  { path: "/crimes/locations", desc: "Manchetes dos 3 eventos mais recentes em Malmö", check: d => Array.isArray(d) && d.every(x => typeof x === "string") },
+  { path: "/crimes/search?city=stockholm", desc: "Busca por cidade", check: d => Array.isArray(d) && d.length > 0 },
+  { path: "/crimes/search", desc: "Sem cidade → deve responder 400", expect: 400 },
+  { path: "/crimes/latest", desc: "Evento mais recente em Skåne län", check: d => d && typeof d.id === "number" },
+];
+
+const $ = id => document.getElementById(id);
+const fmtTime = new Intl.DateTimeFormat("pt-BR", { timeStyle: "medium" });
+const fmtDate = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+const STATUS_STYLES = {
+  idle:    "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  loading: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  ok:      "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  err:     "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
+};
+const setChip = (el, kind, text) => { el.className = "chip " + STATUS_STYLES[kind]; el.textContent = text; };
+
+// ----- Route health -----
+$("totalCount").textContent = ROUTES.length;
+const rows = ROUTES.map(r => {
+  const li = $("routeTpl").content.firstElementChild.cloneNode(true);
+  li.querySelector("[data-path]").textContent = r.path;
+  li.querySelector("[data-desc]").textContent = r.desc;
+  $("routes").appendChild(li);
+  return {
+    status: li.querySelector("[data-status]"),
+    meta: li.querySelector("[data-meta]"),
+    body: li.querySelector("[data-body]"),
+  };
+});
+
+async function testRoute(r, i) {
+  const row = rows[i];
+  setChip(row.status, "loading", "testando…");
+  row.meta.textContent = "";
+  const t0 = performance.now();
+  try {
+    const res = await fetch(r.path);
+    const ms = Math.round(performance.now() - t0);
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch {}
+    const pass = res.status === (r.expect ?? 200) && (!r.check || r.check(data));
+    setChip(row.status, pass ? "ok" : "err", `${pass ? "✓" : "✗"} ${res.status}`);
+    row.meta.textContent = `${ms} ms` + (Array.isArray(data) ? ` · ${data.length} itens` : "");
+    row.body.textContent = data !== null ? JSON.stringify(data, null, 2) : text;
+    return { pass, ms };
+  } catch (e) {
+    setChip(row.status, "err", "✗ sem resposta");
+    row.body.textContent = String(e);
+    return { pass: false, ms: null };
+  }
+}
+
+async function runAll() {
+  $("runAll").disabled = true;
+  $("runIcon").classList.add("animate-spin");
+  const results = await Promise.all(ROUTES.map(testRoute));
+  const ok = results.filter(r => r.pass).length;
+  const times = results.map(r => r.ms).filter(ms => ms !== null);
+  $("okCount").textContent = ok;
+  $("okCount").className = ok === ROUTES.length ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  $("avgMs").textContent = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : "–";
+  $("lastRun").textContent = fmtTime.format(new Date());
+
+  const pill = $("serverPill");
+  const allDown = times.length === 0;
+  const kind = allDown ? "err" : ok === ROUTES.length ? "ok" : "loading";
+  const dot = { ok: "bg-emerald-500", err: "bg-rose-500", loading: "bg-amber-500" }[kind];
+  const label = allDown ? "servidor fora do ar" : ok === ROUTES.length ? "tudo funcionando" : "com falhas";
+  pill.className = "chip " + STATUS_STYLES[kind];
+  pill.innerHTML = `<span class="size-1.5 rounded-full ${dot}"></span>`;
+  pill.append(" " + label);
+
+  $("runIcon").classList.remove("animate-spin");
+  $("runAll").disabled = false;
+}
+$("runAll").onclick = runAll;
+runAll();
+
+// ----- Search -----
+const CATEGORY_STYLES = {
+  trafik:       "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+  trafikolycka: "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+  brand:        "bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400",
+  vald:         "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
+  grovt_vald:   "bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+  stold:        "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
+  bedrageri:    "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400",
+  narkotika:    "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-400",
+  sammanfattning: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400",
+};
+const DEFAULT_CATEGORY = "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+
+["Stockholm", "Göteborg", "Malmö", "Uppsala", "Lund"].forEach(c => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = c;
+  b.className = "chip cursor-pointer bg-zinc-100 text-zinc-700 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-300";
+  b.onclick = () => { $("city").value = c; search(c); };
+  $("quickCities").appendChild(b);
+});
+
+function setLink(a, href) {
+  if (href) a.href = href; else a.remove();
+}
+
+async function search(city) {
+  const info = $("searchInfo"), list = $("results");
+  info.textContent = `Buscando eventos em ${city}…`;
+  list.replaceChildren(...Array.from({ length: 4 }, () => $("skeletonTpl").content.firstElementChild.cloneNode(true)));
+  try {
+    const res = await fetch("/crimes/search?city=" + encodeURIComponent(city));
+    const data = await res.json();
+    if (!res.ok) { list.replaceChildren(); info.textContent = data.error || data.err || `Erro ${res.status}`; return; }
+    info.textContent = data.length ? `${data.length} eventos recentes em ${city}` : `Nenhum evento encontrado para "${city}".`;
+    list.replaceChildren(...data.map(ev => {
+      const card = $("eventTpl").content.firstElementChild.cloneNode(true);
+      const img = card.querySelector("[data-img]");
+      if (ev.image) { img.src = ev.image; img.onerror = () => img.remove(); } else img.remove();
+      const type = card.querySelector("[data-type]");
+      type.textContent = ev.title_type;
+      type.className = "chip " + (CATEGORY_STYLES[ev.kategori] || DEFAULT_CATEGORY);
+      const time = card.querySelector("[data-date]");
+      time.dateTime = ev.pubdate_iso8601;
+      time.textContent = fmtDate.format(new Date(ev.pubdate_iso8601));
+      card.querySelector("[data-headline]").textContent = ev.headline;
+      card.querySelector("[data-teaser]").textContent = ev.content_teaser || ev.description || "";
+      card.querySelector("[data-loc]").textContent = "📍 " + ev.location_string;
+      setLink(card.querySelector("[data-permalink]"), ev.permalink);
+      setLink(card.querySelector("[data-source]"), ev.external_source_link);
+      return card;
+    }));
+  } catch {
+    list.replaceChildren();
+    info.textContent = "Falha ao chamar a API.";
+  }
+}
+
+$("searchForm").onsubmit = e => { e.preventDefault(); search($("city").value.trim()); };
+search($("city").value);
+</script>
+</body>
+</html>
